@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AST Repository Visualizer</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .glass {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .loader {
+            border-top-color: #667eea;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .pulse-glow {
+            animation: pulseGlow 2s infinite;
+        }
+        @keyframes pulseGlow {
+            0%, 100% { box-shadow: 0 0 5px rgba(102, 126, 234, 0.5); }
+            50% { box-shadow: 0 0 20px rgba(102, 126, 234, 0.8); }
+        }
+    </style>
+</head>
+<body class="gradient-bg min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <!-- Main Card -->
+        <div class="glass rounded-lg shadow-2xl p-8 max-w-4xl mx-auto fade-in">
+            <header class="text-center mb-8">
+                <h1 class="text-5xl font-bold text-white mb-4">
+                    <i class="fas fa-project-diagram mr-3 text-blue-300"></i>
+                    AST Repository Visualizer
+                </h1>
+                <p class="text-gray-200 text-lg">
+                    Analyze and visualize Python code structure with interactive graphs
+                </p>
+                <p class="text-gray-300 text-sm mt-2">
+                    Powered by modern AST analysis • Real-time visualization • Security-first design
+                </p>
+            </header>
+            
+            <!-- Input Form -->
+            <div class="space-y-6">
+                <!-- Input Type Tabs -->
+                <div class="flex space-x-4 mb-6 justify-center">
+                    <button onclick="switchTab('local')" id="local-tab" 
+                            class="px-6 py-3 bg-white bg-opacity-20 text-white rounded-lg hover:bg-opacity-30 transition duration-300 transform hover:scale-105 pulse-glow">
+                        <i class="fas fa-folder mr-2"></i>Local Repository
+                    </button>
+                    <button onclick="switchTab('url')" id="url-tab"
+                            class="px-6 py-3 text-white rounded-lg hover:bg-white hover:bg-opacity-20 transition duration-300 transform hover:scale-105">
+                        <i class="fab fa-github mr-2"></i>Git URL
+                    </button>
+                </div>
+                
+                <!-- Local Path Input -->
+                <div id="local-input" class="space-y-4">
+                    <div>
+                        <label class="block text-white mb-2 font-medium">
+                            <i class="fas fa-folder-open mr-2"></i>Repository Path
+                        </label>
+                        <input type="text" id="repo-path" 
+                               placeholder="/path/to/your/python/project"
+                               class="w-full px-4 py-3 rounded-lg bg-white bg-opacity-20 text-white placeholder-gray-300 border border-white border-opacity-30 focus:outline-none focus:border-opacity-50 focus:ring-2 focus:ring-blue-400 transition">
+                        <p class="text-gray-300 text-sm mt-1">
+                            Enter the absolute path to your Python project directory
+                        </p>
+                    </div>
+                </div>
+                
+                <!-- URL Input -->
+                <div id="url-input" class="space-y-4 hidden">
+                    <div>
+                        <label class="block text-white mb-2 font-medium">
+                            <i class="fab fa-git-alt mr-2"></i>Repository URL
+                        </label>
+                        <input type="text" id="repo-url" 
+                               placeholder="https://github.com/username/repository"
+                               class="w-full px-4 py-3 rounded-lg bg-white bg-opacity-20 text-white placeholder-gray-300 border border-white border-opacity-30 focus:outline-none focus:border-opacity-50 focus:ring-2 focus:ring-blue-400 transition">
+                        <p class="text-gray-300 text-sm mt-1">
+                            Enter a public Git repository URL (GitHub, GitLab, etc.)
+                        </p>
+                    </div>
+                </div>
+                
+                <!-- Analysis Options -->
+                <div class="bg-white bg-opacity-5 rounded-lg p-4">
+                    <h3 class="text-white font-medium mb-3">
+                        <i class="fas fa-cogs mr-2"></i>Analysis Options
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <label class="flex items-center text-white cursor-pointer">
+                            <input type="checkbox" id="include-tests" class="mr-3 w-4 h-4" checked>
+                            <span>Include test files</span>
+                        </label>
+                        <label class="flex items-center text-white cursor-pointer">
+                            <input type="checkbox" id="deep-analysis" class="mr-3 w-4 h-4">
+                            <span>Deep complexity analysis</span>
+                        </label>
+                        <label class="flex items-center text-white cursor-pointer">
+                            <input type="checkbox" id="cache-results" class="mr-3 w-4 h-4" checked>
+                            <span>Cache results</span>
+                        </label>
+                        <label class="flex items-center text-white cursor-pointer">
+                            <input type="checkbox" id="generate-report" class="mr-3 w-4 h-4">
+                            <span>Generate summary report</span>
+                        </label>
+                    </div>
+                </div>
+                
+                <!-- Analyze Button -->
+                <button onclick="analyzeRepository()" id="analyze-btn"
+                        class="w-full py-4 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-600 hover:to-purple-700 transition duration-300 transform hover:scale-105 shadow-lg">
+                    <i class="fas fa-search mr-2"></i>Analyze Repository
+                </button>
+                
+                <!-- Progress Section -->
+                <div id="progress-section" class="hidden">
+                    <div class="bg-white bg-opacity-10 rounded-lg p-4">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-white font-medium">Analysis Progress</span>
+                            <span id="progress-percent" class="text-white text-sm">0%</span>
+                        </div>
+                        <div class="w-full bg-white bg-opacity-20 rounded-full h-2">
+                            <div id="progress-bar" class="bg-blue-500 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                        </div>
+                        <p id="progress-status" class="text-gray-300 text-sm mt-2">Preparing analysis...</p>
+                    </div>
+                </div>
+                
+                <!-- Loading State -->
+                <div id="loading" class="hidden">
+                    <div class="flex items-center justify-center space-x-3 py-6">
+                        <div class="loader border-4 border-white border-opacity-30 rounded-full w-10 h-10"></div>
+                        <div class="text-white">
+                            <div id="loading-text" class="font-medium">Analyzing repository...</div>
+                            <div id="loading-detail" class="text-sm text-gray-300">This may take a few moments</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Messages -->
+                <div id="error" class="hidden bg-red-500 bg-opacity-20 border border-red-400 text-white p-4 rounded-lg">
+                    <div class="flex items-center">
+                        <i class="fas fa-exclamation-triangle mr-3 text-red-400"></i>
+                        <div>
+                            <div class="font-medium">Error</div>
+                            <div id="error-message" class="text-sm"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="success" class="hidden bg-green-500 bg-opacity-20 border border-green-400 text-white p-4 rounded-lg">
+                    <div class="flex items-center">
+                        <i class="fas fa-check-circle mr-3 text-green-400"></i>
+                        <div>
+                            <div class="font-medium">Success</div>
+                            <div id="success-message" class="text-sm"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Recent Analyses -->
+        <div class="glass rounded-lg shadow-2xl p-6 max-w-4xl mx-auto mt-8 fade-in">
+            <h2 class="text-2xl font-bold text-white mb-4">
+                <i class="fas fa-history mr-3"></i>Recent Analyses
+            </h2>
+            <div id="recent-analyses" class="space-y-2">
+                <!-- Will be populated dynamically -->
+            </div>
+        </div>
+        
+        <!-- Features Section -->
+        <div class="glass rounded-lg shadow-2xl p-6 max-w-4xl mx-auto mt-8 fade-in">
+            <h2 class="text-2xl font-bold text-white mb-6 text-center">
+                <i class="fas fa-star mr-3"></i>Features
+            </h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="text-center text-white">
+                    <i class="fas fa-chart-network text-4xl text-blue-300 mb-3"></i>
+                    <h3 class="font-medium mb-2">Interactive Visualizations</h3>
+                    <p class="text-gray-300 text-sm">Network graphs, treemaps, and complexity charts</p>
+                </div>
+                <div class="text-center text-white">
+                    <i class="fas fa-shield-alt text-4xl text-green-300 mb-3"></i>
+                    <h3 class="font-medium mb-2">Security First</h3>
+                    <p class="text-gray-300 text-sm">Input validation and secure processing</p>
+                </div>
+                <div class="text-center text-white">
+                    <i class="fas fa-tachometer-alt text-4xl text-purple-300 mb-3"></i>
+                    <h3 class="font-medium mb-2">High Performance</h3>
+                    <p class="text-gray-300 text-sm">Parallel processing and smart caching</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        let currentTab = 'local';
+        let analysisInProgress = false;
+        
+        function switchTab(tab) {
+            currentTab = tab;
+            
+            // Update tab styles
+            const localTab = document.getElementById('local-tab');
+            const urlTab = document.getElementById('url-tab');
+            
+            if (tab === 'local') {
+                localTab.classList.add('bg-white', 'bg-opacity-20', 'pulse-glow');
+                urlTab.classList.remove('bg-white', 'bg-opacity-20', 'pulse-glow');
+            } else {
+                urlTab.classList.add('bg-white', 'bg-opacity-20', 'pulse-glow');
+                localTab.classList.remove('bg-white', 'bg-opacity-20', 'pulse-glow');
+            }
+            
+            // Show/hide inputs
+            document.getElementById('local-input').classList.toggle('hidden', tab !== 'local');
+            document.getElementById('url-input').classList.toggle('hidden', tab !== 'url');
+        }
+        
+        async function analyzeRepository() {
+            if (analysisInProgress) {
+                showError('Analysis already in progress');
+                return;
+            }
+            
+            // Clear previous messages
+            hideMessages();
+            
+            // Get input data
+            const data = {};
+            if (currentTab === 'local') {
+                data.path = document.getElementById('repo-path').value.trim();
+                if (!data.path) {
+                    showError('Please enter a repository path');
+                    return;
+                }
+            } else {
+                data.url = document.getElementById('repo-url').value.trim();
+                if (!data.url) {
+                    showError('Please enter a repository URL');
+                    return;
+                }
+                
+                // Basic URL validation with helpful error messages
+                if (!isValidUrl(data.url)) {
+                    let errorMsg = 'Please enter a valid Git repository URL';
+                    
+                    // Provide specific guidance for common mistakes
+                    if (data.url.startsWith('https:/') && !data.url.startsWith('https://')) {
+                        errorMsg = 'URL typo detected: use "https://" (double slash) instead of "https:/"';
+                    } else if (data.url.startsWith('http:/') && !data.url.startsWith('http://')) {
+                        errorMsg = 'URL typo detected: use "http://" (double slash) instead of "http:/"';
+                    } else if (!data.url.includes('github.com') && !data.url.includes('gitlab.com') && 
+                               !data.url.includes('bitbucket.org') && !data.url.endsWith('.git')) {
+                        errorMsg = 'URL should be a Git repository (GitHub, GitLab, Bitbucket, or end with .git)';
+                    }
+                    
+                    showError(errorMsg);
+                    return;
+                }
+            }
+            
+            // Add options
+            data.options = {
+                include_tests: document.getElementById('include-tests').checked,
+                deep_analysis: document.getElementById('deep-analysis').checked,
+                cache_results: document.getElementById('cache-results').checked,
+                generate_report: document.getElementById('generate-report').checked
+            };
+            
+            analysisInProgress = true;
+            setLoadingState(true);
+            updateLoadingText('Validating input...', 'Checking repository accessibility');
+            
+            try {
+                const startTime = Date.now();
+                
+                updateLoadingText('Starting analysis...', 'Processing Python files');
+                
+                const response = await fetch('/api/analyze', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    const analysisTime = (Date.now() - startTime) / 1000;
+                    const fileCount = result.summary?.total_files || 0;
+                    
+                    showSuccess(`Analysis complete! Found ${fileCount} files in ${analysisTime.toFixed(2)}s`);
+                    
+                    // Save to recent analyses
+                    saveRecentAnalysis(result.analysis_id, data, result.summary);
+                    
+                    // Redirect to visualization
+                    setTimeout(() => {
+                        window.location.href = `/visualization/${result.analysis_id}`;
+                    }, 2000);
+                    
+                } else {
+                    if (response.status === 429) {
+                        showError('Rate limit exceeded. Please wait before starting another analysis.');
+                    } else {
+                        showError(result.error || 'Analysis failed');
+                    }
+                }
+                
+            } catch (error) {
+                if (error.name === 'AbortError') {
+                    showError('Analysis timed out. Please try with a smaller repository.');
+                } else {
+                    showError('Network error: ' + error.message);
+                }
+            } finally {
+                analysisInProgress = false;
+                setLoadingState(false);
+            }
+        }
+        
+        function isValidUrl(string) {
+            if (!string || typeof string !== 'string') {
+                return false;
+            }
+            
+            // Check for common typos
+            if (string.startsWith('https:/') && !string.startsWith('https://')) {
+                return false; // Missing second slash
+            }
+            if (string.startsWith('http:/') && !string.startsWith('http://')) {
+                return false; // Missing second slash
+            }
+            
+            try {
+                const url = new URL(string);
+                const validProtocols = ['http:', 'https:', 'git:'];
+                
+                // Check protocol
+                if (!validProtocols.includes(url.protocol)) {
+                    return false;
+                }
+                
+                // Check hostname exists
+                if (!url.hostname) {
+                    return false;
+                }
+                
+                // Basic Git repository patterns
+                const gitPatterns = [
+                    /github\.com/i,
+                    /gitlab\.com/i,
+                    /bitbucket\.org/i,
+                    /\.git$/i
+                ];
+                
+                return gitPatterns.some(pattern => pattern.test(string));
+                
+            } catch (_) {
+                return false;
+            }
+        }
+        
+        function setLoadingState(loading) {
+            const loadingEl = document.getElementById('loading');
+            const analyzeBtn = document.getElementById('analyze-btn');
+            
+            if (loading) {
+                loadingEl.classList.remove('hidden');
+                analyzeBtn.disabled = true;
+                analyzeBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            } else {
+                loadingEl.classList.add('hidden');
+                analyzeBtn.disabled = false;
+                analyzeBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+        }
+        
+        function updateLoadingText(primary, secondary) {
+            document.getElementById('loading-text').textContent = primary;
+            document.getElementById('loading-detail').textContent = secondary;
+        }
+        
+        function hideMessages() {
+            document.getElementById('error').classList.add('hidden');
+            document.getElementById('success').classList.add('hidden');
+        }
+        
+        function showError(message) {
+            document.getElementById('error-message').textContent = message;
+            document.getElementById('error').classList.remove('hidden');
+            
+            // Auto-hide after 10 seconds
+            setTimeout(() => {
+                document.getElementById('error').classList.add('hidden');
+            }, 10000);
+        }
+        
+        function showSuccess(message) {
+            document.getElementById('success-message').textContent = message;
+            document.getElementById('success').classList.remove('hidden');
+        }
+        
+        function saveRecentAnalysis(analysisId, inputData, summary) {
+            const recent = JSON.parse(localStorage.getItem('recent_analyses') || '[]');
+            
+            const analysis = {
+                id: analysisId,
+                name: inputData.path ? inputData.path.split('/').pop() : inputData.url.split('/').pop(),
+                type: inputData.path ? 'local' : 'remote',
+                date: new Date().toLocaleDateString(),
+                time: new Date().toLocaleTimeString(),
+                summary: summary
+            };
+            
+            // Add to beginning and limit to 10
+            recent.unshift(analysis);
+            recent.splice(10);
+            
+            localStorage.setItem('recent_analyses', JSON.stringify(recent));
+            loadRecentAnalyses();
+        }
+        
+        function loadRecentAnalyses() {
+            const recent = JSON.parse(localStorage.getItem('recent_analyses') || '[]');
+            const container = document.getElementById('recent-analyses');
+            
+            if (recent.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-8">
+                        <i class="fas fa-inbox text-4xl text-gray-400 mb-3"></i>
+                        <p class="text-gray-300">No recent analyses</p>
+                        <p class="text-gray-400 text-sm">Your analysis history will appear here</p>
+                    </div>
+                `;
+            } else {
+                container.innerHTML = recent.map(item => `
+                    <a href="/visualization/${item.id}" 
+                       class="block p-4 bg-white bg-opacity-10 rounded-lg hover:bg-opacity-20 transition duration-300 transform hover:scale-102">
+                        <div class="flex justify-between items-center text-white">
+                            <div class="flex items-center space-x-3">
+                                <i class="fas ${item.type === 'local' ? 'fa-folder' : 'fa-cloud'} text-blue-300"></i>
+                                <div>
+                                    <div class="font-medium">${item.name}</div>
+                                    <div class="text-sm text-gray-300">
+                                        ${item.summary?.total_files || 0} files • 
+                                        ${item.summary?.total_lines || 0} lines
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="text-right text-sm text-gray-300">
+                                <div>${item.date}</div>
+                                <div>${item.time}</div>
+                            </div>
+                        </div>
+                    </a>
+                `).join('');
+            }
+        }
+        
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', function() {
+            loadRecentAnalyses();
+            
+            // Add enter key support for inputs
+            ['repo-path', 'repo-url'].forEach(id => {
+                document.getElementById(id).addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        analyzeRepository();
+                    }
+                });
+            });
+        });
+        
+        // Check application status
+        async function checkStatus() {
+            try {
+                const response = await fetch('/health');
+                const status = await response.json();
+                console.log('Application status:', status);
+            } catch (error) {
+                console.warn('Could not check application status:', error);
+            }
+        }
+        
+        // Check status on load
+        checkStatus();
+    </script>
+</body>
+</html>

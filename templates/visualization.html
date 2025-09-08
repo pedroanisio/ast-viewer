@@ -1,0 +1,1998 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AST Visualization - {{ summary.get('project_name', 'Repository') }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://unpkg.com/vis-network@9.1.9/standalone/umd/vis-network.min.js"></script>
+    <link href="https://unpkg.com/vis-network@9.1.9/styles/vis-network.min.css" rel="stylesheet">
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        #network-graph {
+            height: 600px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.05);
+        }
+        
+        .sidebar {
+            height: calc(100vh - 2rem);
+            overflow-y: auto;
+        }
+        
+        .glass {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .spinner {
+            border-top-color: #3490dc;
+            animation: spin 1s ease-in-out infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .chart-container {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .code-panel {
+            font-family: 'Monaco', 'Menlo', 'Consolas', 'DejaVu Sans Mono', 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.4;
+            background: #1a1a1a;
+            color: #e6e6e6;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        .code-line {
+            display: flex;
+            min-height: 18px;
+            padding: 1px 0;
+            border-radius: 2px;
+            transition: background-color 0.2s ease;
+        }
+        
+        .code-line:hover {
+            background-color: rgba(255, 255, 255, 0.05);
+        }
+        
+        .line-number {
+            user-select: none;
+            color: #666;
+            text-align: right;
+            padding-right: 12px;
+            min-width: 50px;
+            flex-shrink: 0;
+            border-right: 1px solid #333;
+            margin-right: 12px;
+            font-size: 12px;
+        }
+        
+        .line-content {
+            flex: 1;
+            white-space: pre;
+            overflow-x: auto;
+            word-break: keep-all;
+            min-height: 18px;
+            padding-left: 4px;
+        }
+        
+        /* Enhanced syntax highlighting - VS Code Dark+ theme colors */
+        .syntax-keyword { color: #569cd6; font-weight: 500; }
+        .syntax-string { color: #ce9178; }
+        .syntax-comment { color: #6a9955; font-style: italic; opacity: 0.8; }
+        .syntax-number { color: #b5cea8; }
+        .syntax-function { color: #dcdcaa; font-weight: 500; }
+        .syntax-class { color: #4ec9b0; font-weight: 500; }
+        .syntax-import { color: #c586c0; font-weight: 500; }
+        .syntax-operator { color: #d4d4d4; }
+        .syntax-builtin { color: #4fc1ff; }
+        .syntax-decorator { color: #ffd700; }
+        
+        /* Highlighted lines */
+        .line-highlighted-yellow {
+            background-color: rgba(255, 193, 7, 0.2) !important;
+            border-left: 3px solid #ffc107;
+        }
+        
+        .line-highlighted-green {
+            background-color: rgba(40, 167, 69, 0.2) !important;
+            border-left: 3px solid #28a745;
+        }
+        
+        .line-highlighted-blue {
+            background-color: rgba(0, 123, 255, 0.2) !important;
+            border-left: 3px solid #007bff;
+        }
+        
+        .file-item {
+            transition: all 0.3s ease;
+        }
+        
+        .file-item:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: translateX(4px);
+        }
+        
+        .metric-card {
+            background: rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+        }
+        
+        .metric-card:hover {
+            background: rgba(255, 255, 255, 0.15);
+            transform: translateY(-2px);
+        }
+        
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+        }
+        
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid #fff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="gradient-bg min-h-screen">
+    <div class="flex h-screen">
+        <!-- Sidebar -->
+        <div class="w-80 glass p-4 sidebar">
+            <!-- Header -->
+            <div class="mb-6">
+                <div class="flex items-center justify-between mb-2">
+                    <h2 class="text-xl font-bold text-white">Repository Analysis</h2>
+                    <a href="/" class="text-white hover:text-blue-300 transition">
+                        <i class="fas fa-home"></i>
+                    </a>
+                </div>
+                <p class="text-gray-300 text-sm">Analysis ID: {{ analysis_id[:8] }}...</p>
+            </div>
+            
+            <!-- Summary Stats -->
+            <div id="summary" class="space-y-3 mb-6">
+                <!-- Will be populated -->
+            </div>
+            
+            <!-- Controls -->
+            <div class="mb-6 space-y-4">
+                <!-- Search -->
+                <div>
+                    <label class="block text-white text-sm font-medium mb-1">
+                        <i class="fas fa-search mr-2"></i>Search Nodes
+                    </label>
+                    <input type="text" id="search" placeholder="Search functions, classes..."
+                           class="w-full px-3 py-2 bg-white bg-opacity-20 rounded text-white placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+                </div>
+                
+                <!-- Node Type Filter -->
+                <div>
+                    <label class="block text-white text-sm font-medium mb-1">
+                        <i class="fas fa-filter mr-2"></i>Node Type
+                    </label>
+                    <select id="node-type-filter" 
+                            class="w-full px-3 py-2 bg-white bg-opacity-20 rounded text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+                        <option value="">All Types</option>
+                        <option value="FunctionDef">Functions</option>
+                        <option value="ClassDef">Classes</option>
+                        <option value="Import">Imports</option>
+                        <option value="ImportFrom">Import From</option>
+                        <option value="If">Conditionals</option>
+                        <option value="For">Loops</option>
+                        <option value="Try">Try Blocks</option>
+                    </select>
+                </div>
+                
+                <!-- Export Options -->
+                <div>
+                    <button onclick="exportAnalysis()" 
+                            class="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm font-medium transition">
+                        <i class="fas fa-download mr-2"></i>Export Data
+                    </button>
+                </div>
+            </div>
+            
+            <!-- File List -->
+            <div>
+                <h3 class="text-white font-medium mb-3">
+                    <i class="fas fa-file-code mr-2"></i>Files (<span id="file-count">0</span>)
+                </h3>
+                <div id="file-list" class="space-y-1 max-h-64 overflow-y-auto">
+                    <!-- Will be populated -->
+                </div>
+            </div>
+            
+            <!-- Search Results -->
+            <div id="search-results" class="hidden mt-6">
+                <h3 class="text-white font-medium mb-3">
+                    <i class="fas fa-search mr-2"></i>Search Results
+                </h3>
+                <div id="search-results-list" class="space-y-1 max-h-64 overflow-y-auto">
+                    <!-- Will be populated -->
+                </div>
+            </div>
+        </div>
+        
+        <!-- Main Content -->
+        <div class="flex-1 p-4" id="main-content">
+            <!-- AST Navigation Bar (Hidden by default) -->
+            <div id="ast-navigation-bar" class="hidden mb-4 p-3 bg-white bg-opacity-10 rounded-lg">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-4">
+                        <button onclick="closeFileAST()" class="text-white hover:text-red-400 transition-colors">
+                            <i class="fas fa-arrow-left mr-2"></i>Back to Repository
+                        </button>
+                        <div class="text-white">
+                            <i class="fas fa-code-branch mr-2"></i>
+                            <span id="ast-file-name" class="font-semibold">Loading...</span>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <input type="text" id="ast-search" placeholder="Search AST nodes..."
+                               class="px-3 py-1 bg-white bg-opacity-20 rounded text-white placeholder-gray-400 text-sm w-64">
+                        <button onclick="expandAllNodes()" class="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs">
+                            <i class="fas fa-expand-arrows-alt"></i>
+                        </button>
+                        <button onclick="collapseAllNodes()" class="px-2 py-1 bg-gray-600 hover:bg-gray-700 text-white rounded text-xs">
+                            <i class="fas fa-compress-arrows-alt"></i>
+                        </button>
+                        <button onclick="exportAST()" class="px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs">
+                            <i class="fas fa-download"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Repository View -->
+            <div id="repository-view" class="glass rounded-lg p-4 h-full">
+                <!-- Visualization Header -->
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex space-x-4">
+                        <button onclick="switchView('network')" id="network-tab"
+                                class="px-4 py-2 bg-white bg-opacity-20 text-white rounded transition hover:bg-opacity-30">
+                            <i class="fas fa-project-diagram mr-2"></i>Network Graph
+                        </button>
+                        <button onclick="switchView('treemap')" id="treemap-tab"
+                                class="px-4 py-2 text-white rounded hover:bg-white hover:bg-opacity-20 transition">
+                            <i class="fas fa-th mr-2"></i>Treemap
+                        </button>
+                        <button onclick="switchView('complexity')" id="complexity-tab"
+                                class="px-4 py-2 text-white rounded hover:bg-white hover:bg-opacity-20 transition">
+                            <i class="fas fa-chart-bar mr-2"></i>Complexity
+                        </button>
+                        <button onclick="switchView('metrics')" id="metrics-tab"
+                                class="px-4 py-2 text-white rounded hover:bg-white hover:bg-opacity-20 transition">
+                            <i class="fas fa-analytics mr-2"></i>Metrics
+                        </button>
+                    </div>
+                    
+                    <div class="flex items-center space-x-2 text-white text-sm">
+                        <i class="fas fa-clock"></i>
+                        <span id="analysis-time">--</span>
+                    </div>
+                </div>
+                
+                <!-- Visualization Container -->
+                <div class="relative">
+                    <!-- Network View -->
+                    <div id="network-view" class="chart-container">
+                        <div id="network-graph"></div>
+                        <div id="network-loading" class="loading-overlay hidden">
+                            <div class="text-center text-white">
+                                <div class="spinner mb-3"></div>
+                                <div>Loading network graph...</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Treemap View -->
+                    <div id="treemap-view" class="chart-container hidden">
+                        <div id="treemap-chart" style="height: 600px;"></div>
+                        <div id="treemap-loading" class="loading-overlay hidden">
+                            <div class="text-center text-white">
+                                <div class="spinner mb-3"></div>
+                                <div>Loading treemap...</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Complexity View -->
+                    <div id="complexity-view" class="chart-container hidden">
+                        <div id="complexity-chart" style="height: 600px;"></div>
+                        <div id="complexity-loading" class="loading-overlay hidden">
+                            <div class="text-center text-white">
+                                <div class="spinner mb-3"></div>
+                                <div>Loading complexity chart...</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Metrics View -->
+                    <div id="metrics-view" class="hidden">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 h-full">
+                            <div class="space-y-4">
+                                <div class="chart-container p-4">
+                                    <h3 class="text-white font-medium mb-3">
+                                        <i class="fas fa-trophy mr-2"></i>Top Complex Files
+                                    </h3>
+                                    <div id="complex-files-list" class="space-y-2">
+                                        <!-- Will be populated -->
+                                    </div>
+                                </div>
+                                <div class="chart-container p-4">
+                                    <h3 class="text-white font-medium mb-3">
+                                        <i class="fas fa-weight-hanging mr-2"></i>Largest Files
+                                    </h3>
+                                    <div id="large-files-list" class="space-y-2">
+                                        <!-- Will be populated -->
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="space-y-4">
+                                <div class="chart-container p-4">
+                                    <h3 class="text-white font-medium mb-3">
+                                        <i class="fas fa-link mr-2"></i>Most Connected Files
+                                    </h3>
+                                    <div id="connected-files-list" class="space-y-2">
+                                        <!-- Will be populated -->
+                                    </div>
+                                </div>
+                                <div class="chart-container p-4">
+                                    <h3 class="text-white font-medium mb-3">
+                                        <i class="fas fa-pie-chart mr-2"></i>File Size Distribution
+                                    </h3>
+                                    <div id="size-distribution" class="space-y-2">
+                                        <!-- Will be populated -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- AST Split View (Hidden by default) -->
+            <div id="ast-split-view" class="hidden">
+                <div class="flex h-full space-x-4">
+                    <!-- AST Navigation Tree -->
+                    <div class="w-1/4 glass rounded-lg p-4">
+                        <div class="h-full flex flex-col">
+                            <h3 class="text-white font-semibold mb-3 flex items-center">
+                                <i class="fas fa-sitemap mr-2"></i>AST Structure
+                            </h3>
+                            <div id="ast-tree" class="flex-1 overflow-y-auto text-white">
+                                <div class="flex items-center justify-center h-full">
+                                    <div class="text-center">
+                                        <div class="spinner border-4 border-white border-opacity-30 rounded-full w-8 h-8 mb-3 mx-auto"></div>
+                                        <p>Loading AST structure...</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- AST-based Code Display -->
+                    <div class="w-1/4 glass rounded-lg p-4">
+                        <div class="h-full flex flex-col">
+                            <div class="flex items-center justify-between mb-3">
+                                <h3 class="text-white font-semibold flex items-center">
+                                    <i class="fas fa-code mr-2"></i>AST Representation
+                                </h3>
+                                <div class="flex items-center space-x-2 text-sm text-gray-300">
+                                    <span id="code-line-count">-- lines</span>
+                                    <span>•</span>
+                                    <span id="code-file-size">-- KB</span>
+                                </div>
+                            </div>
+                            <div id="code-display" class="flex-1 overflow-y-auto code-panel p-4">
+                                <div class="flex items-center justify-center h-full">
+                                    <div class="text-center text-gray-400">
+                                        <div class="spinner border-4 border-gray-600 border-opacity-30 rounded-full w-8 h-8 mb-3 mx-auto"></div>
+                                        <p>Loading AST representation...</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Actual Source Code Display -->
+                    <div class="w-1/4 glass rounded-lg p-4">
+                        <div class="h-full flex flex-col">
+                            <div class="flex items-center justify-between mb-3">
+                                <h3 class="text-white font-semibold flex items-center">
+                                    <i class="fas fa-file-code mr-2"></i>Source Code
+                                </h3>
+                                <div class="flex items-center space-x-2 text-sm text-gray-300">
+                                    <span id="source-line-count">-- lines</span>
+                                    <span>•</span>
+                                    <span id="source-encoding">UTF-8</span>
+                                </div>
+                            </div>
+                            <div id="source-display" class="flex-1 overflow-y-auto code-panel p-4">
+                                <div class="flex items-center justify-center h-full">
+                                    <div class="text-center text-gray-400">
+                                        <div class="spinner border-4 border-gray-600 border-opacity-30 rounded-full w-8 h-8 mb-3 mx-auto"></div>
+                                        <p>Loading source code...</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Node Details Panel -->
+                    <div class="w-1/4 glass rounded-lg p-4">
+                        <div class="h-full flex flex-col">
+                            <h3 class="text-white font-semibold mb-3 flex items-center">
+                                <i class="fas fa-info-circle mr-2"></i>Node Details
+                            </h3>
+                            <div id="ast-node-details" class="flex-1 text-white text-sm">
+                                <p class="text-gray-400">Click on an AST node to view details</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Tooltip -->
+    <div id="tooltip" class="absolute bg-gray-900 text-white text-sm p-2 rounded shadow-lg hidden z-50 pointer-events-none"></div>
+    
+    <!-- AST Viewer Side Panel (Hidden by default) -->
+    <div id="ast-viewer-panel" class="hidden">
+        <!-- This will be populated when a file is selected -->
+    </div>
+    
+    <script>
+        const analysisId = '{{ analysis_id }}';
+        let network = null;
+        let currentView = 'network';
+        let analysisData = null;
+        let searchTimeout = null;
+        
+        // Initialize visualization
+        async function loadVisualization() {
+            console.log('Starting visualization load...');
+            try {
+                showLoading('network');
+                console.log('Loading state shown for network');
+                
+                const response = await fetch(`/api/visualize/${analysisId}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                analysisData = await response.json();
+                
+                // Update summary
+                updateSummary(analysisData.summary);
+                
+                // Update file list
+                updateFileList(analysisData.nodes);
+                
+                // Create visualizations with proper error handling
+                console.log('Creating network graph...');
+                try {
+                    await createNetworkGraph(analysisData);
+                    console.log('Network graph created successfully');
+                } catch (networkError) {
+                    console.error('Network graph creation failed:', networkError);
+                    showError('Failed to create network visualization');
+                } finally {
+                    // Always hide loading regardless of success or failure
+                    console.log('Attempting to hide loading state...');
+                    hideLoading('network');
+                }
+                
+                // Preload other views
+                setTimeout(() => createTreemap(analysisData), 1000);
+                setTimeout(() => createComplexityChart(analysisData), 2000);
+                setTimeout(() => updateMetricsView(analysisData.metrics), 3000);
+                
+            } catch (error) {
+                console.error('Error loading visualization:', error);
+                showError('Failed to load visualization: ' + error.message);
+                hideLoading('network');
+            }
+        }
+        
+        function updateSummary(summary) {
+            const summaryEl = document.getElementById('summary');
+            const analysisTimeEl = document.getElementById('analysis-time');
+            
+            if (summary.analysis_time) {
+                analysisTimeEl.textContent = `${summary.analysis_time.toFixed(2)}s`;
+            }
+            
+            summaryEl.innerHTML = `
+                <div class="metric-card rounded-lg p-3">
+                    <div class="text-xs text-gray-300 uppercase tracking-wide">Total Files</div>
+                    <div class="text-2xl font-bold text-white">${(summary.total_files || 0).toLocaleString()}</div>
+                </div>
+                <div class="metric-card rounded-lg p-3">
+                    <div class="text-xs text-gray-300 uppercase tracking-wide">Lines of Code</div>
+                    <div class="text-2xl font-bold text-white">${(summary.total_lines || 0).toLocaleString()}</div>
+                </div>
+                <div class="metric-card rounded-lg p-3">
+                    <div class="text-xs text-gray-300 uppercase tracking-wide">Classes</div>
+                    <div class="text-2xl font-bold text-white">${(summary.total_classes || 0).toLocaleString()}</div>
+                </div>
+                <div class="metric-card rounded-lg p-3">
+                    <div class="text-xs text-gray-300 uppercase tracking-wide">Functions</div>
+                    <div class="text-2xl font-bold text-white">${(summary.total_functions || 0).toLocaleString()}</div>
+                </div>
+                <div class="metric-card rounded-lg p-3">
+                    <div class="text-xs text-gray-300 uppercase tracking-wide">Avg Complexity</div>
+                    <div class="text-2xl font-bold text-white">${(summary.average_complexity || 0).toFixed(2)}</div>
+                </div>
+            `;
+        }
+        
+        function updateFileList(nodes) {
+            const fileListEl = document.getElementById('file-list');
+            const fileCountEl = document.getElementById('file-count');
+            
+            if (!nodes || !Array.isArray(nodes)) {
+                console.error('Nodes is not an array:', nodes);
+                fileCountEl.textContent = '0';
+                fileListEl.innerHTML = '<div class="text-red-400 p-2">Error: Invalid node data</div>';
+                return;
+            }
+            
+            // MEMORY OPTIMIZATION: Implement pagination for large file lists
+            const files = nodes.filter(n => n.type === 'file');
+            const pageSize = 25; // Reduced page size for better performance
+            
+            // Store file data globally for pagination
+            currentFileData = files;
+            currentFileOffset = pageSize; // Reset for next page
+            
+            fileCountEl.textContent = files.length;
+            
+            // Show only first page initially
+            const currentPage = files.slice(0, pageSize);
+            
+            fileListEl.innerHTML = currentPage.map(file => {
+                const fileName = file.label;
+                const metrics = file.metrics;
+                // Use file ID directly as it should contain the path
+                const filePath = file.id || fileName;
+                
+                return `
+                    <div class="file-item p-2 rounded cursor-pointer text-sm hover:bg-white hover:bg-opacity-10 transition-colors" 
+                         onclick="openFileAST('${filePath}', '${fileName}')"
+                         title="Click to view AST structure - Lines: ${metrics.lines}, Complexity: ${metrics.complexity.toFixed(2)}">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-2">
+                                <i class="fas fa-file-code text-blue-300 text-xs"></i>
+                                <span class="text-white truncate">${fileName}</span>
+                                <i class="fas fa-external-link-alt text-gray-400 text-xs opacity-0 group-hover:opacity-100 transition-opacity"></i>
+                            </div>
+                            <div class="text-gray-400 text-xs">
+                                ${metrics.lines}L
+                            </div>
+                        </div>
+                        <div class="flex justify-between mt-1 text-xs text-gray-400">
+                            <span>${metrics.classes}C ${metrics.functions}F</span>
+                            <span>⚡${metrics.complexity.toFixed(1)}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            // Add pagination controls if needed
+            if (files.length > pageSize) {
+                fileListEl.innerHTML += `
+                    <div class="mt-3 text-center">
+                        <button onclick="loadMoreFiles()" class="px-3 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700">
+                            Load More (${files.length - pageSize} remaining)
+                        </button>
+                    </div>
+                `;
+            }
+        }
+        
+        async function createNetworkGraph(data) {
+            return new Promise((resolve, reject) => {
+                const container = document.getElementById('network-graph');
+                
+                try {
+                    // Check if container exists
+                    if (!container) {
+                        throw new Error('Network graph container not found');
+                    }
+                    
+                    // Check if data is valid
+                    if (!data || !data.nodes || !Array.isArray(data.nodes)) {
+                        throw new Error('Invalid data structure for network graph');
+                    }
+                    
+                    // MEMORY OPTIMIZATION: Limit nodes for better performance
+                    const maxNodes = 500;
+                    const nodesToShow = data.nodes.slice(0, maxNodes);
+                    
+                    if (data.nodes.length > maxNodes) {
+                        console.log(`Showing ${maxNodes} of ${data.nodes.length} nodes for performance`);
+                    }
+                    
+                    // Create nodes with error checking
+                    const nodes = new vis.DataSet(nodesToShow.map(node => {
+                        if (!node.metrics) {
+                            console.warn('Node missing metrics:', node);
+                            node.metrics = { lines: 0, complexity: 0, classes: 0, functions: 0, size_bytes: 0 };
+                        }
+                        return {
+                            id: node.id,
+                            label: node.label || 'Unknown',
+                            group: node.type || 'file',
+                            title: createNodeTooltip(node),
+                            value: Math.log((node.metrics.lines || 1) + 1) * 10,
+                            color: getNodeColor(node)
+                        };
+                    }));
+                    
+                    // Create edges with error checking
+                    const edges = new vis.DataSet((data.edges || []).map(edge => ({
+                        from: edge.source,
+                        to: edge.target,
+                        arrows: 'to',
+                        color: {
+                            color: edge.type === 'import' ? '#667eea' : '#764ba2',
+                            opacity: 0.7
+                        },
+                        width: 2
+                    })));
+                    
+                    // Network options
+                    const options = {
+                        nodes: {
+                            shape: 'dot',
+                            scaling: {
+                                min: 10,
+                                max: 50
+                            },
+                            font: {
+                                color: '#ffffff',
+                                size: 12,
+                                strokeWidth: 2,
+                                strokeColor: '#000000'
+                            }
+                        },
+                        edges: {
+                            smooth: {
+                                type: 'continuous',
+                                roundness: 0.5
+                            }
+                        },
+                        physics: {
+                            forceAtlas2Based: {
+                                gravitationalConstant: -26,
+                                centralGravity: 0.005,
+                                springLength: 230,
+                                springConstant: 0.18,
+                                damping: 0.4
+                            },
+                            maxVelocity: 146,
+                            solver: 'forceAtlas2Based',
+                            timestep: 0.35,
+                            stabilization: {
+                                iterations: 150
+                            }
+                        },
+                        interaction: {
+                            hover: true,
+                            zoomView: true,
+                            dragView: true
+                        }
+                    };
+                    
+                    // Create network
+                    network = new vis.Network(container, { nodes, edges }, options);
+                    
+                    // Wait for network stabilization before resolving
+                    network.once('stabilizationIterationsDone', function() {
+                        console.log('Network graph stabilized');
+                        resolve();
+                    });
+                    
+                    // Set a timeout in case stabilization takes too long
+                    setTimeout(() => {
+                        if (network && network.getNodePositions) {
+                            console.log('Network graph timeout, but continuing');
+                            resolve();
+                        }
+                    }, 5000); // 5 second timeout
+                    
+                    // Add event listeners
+                    network.on('selectNode', function(params) {
+                        if (params.nodes.length > 0) {
+                            const nodeId = params.nodes[0];
+                            highlightNode(nodeId);
+                        }
+                    });
+                    
+                    network.on('deselectNode', function() {
+                        clearHighlights();
+                    });
+                    
+                } catch (error) {
+                    console.error('Error creating network graph:', error);
+                    reject(error);
+                }
+            });
+        }
+        
+        function createNodeTooltip(node) {
+            const metrics = node.metrics;
+            return `
+                <div style="max-width: 200px;">
+                    <strong>${node.label}</strong><br>
+                    Lines: ${metrics.lines}<br>
+                    Complexity: ${metrics.complexity.toFixed(2)}<br>
+                    Classes: ${metrics.classes}<br>
+                    Functions: ${metrics.functions}<br>
+                    Size: ${(metrics.size_bytes / 1024).toFixed(1)}KB
+                </div>
+            `;
+        }
+        
+        function getNodeColor(node) {
+            const complexity = node.metrics.complexity;
+            if (complexity < 2) return { background: '#4ade80', border: '#22c55e' }; // Green
+            if (complexity < 5) return { background: '#fbbf24', border: '#f59e0b' }; // Yellow
+            if (complexity < 10) return { background: '#fb923c', border: '#ea580c' }; // Orange
+            return { background: '#ef4444', border: '#dc2626' }; // Red
+        }
+        
+        function createTreemap(data) {
+            if (!data.nodes.length) return;
+            
+            const values = data.nodes.map(n => n.metrics.lines);
+            const labels = data.nodes.map(n => n.label);
+            const parents = data.nodes.map(() => '');
+            const colors = data.nodes.map(n => n.metrics.complexity);
+            
+            const trace = {
+                type: 'treemap',
+                labels: labels,
+                parents: parents,
+                values: values,
+                text: data.nodes.map(n => `${n.label}<br>Lines: ${n.metrics.lines}<br>Complexity: ${n.metrics.complexity.toFixed(2)}`),
+                textinfo: 'label+text',
+                marker: {
+                    colorscale: 'Viridis',
+                    colorbar: {
+                        title: 'Complexity',
+                        titlefont: { color: 'white' },
+                        tickfont: { color: 'white' }
+                    },
+                    line: { width: 2 }
+                }
+            };
+            
+            const layout = {
+                margin: { t: 10, l: 10, r: 10, b: 10 },
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                font: { color: 'white' }
+            };
+            
+            const config = {
+                responsive: true,
+                displayModeBar: false, // Hide toolbar for cleaner look
+                scrollZoom: false
+            };
+            
+            Plotly.newPlot('treemap-chart', [trace], layout, config);
+        }
+        
+        function createComplexityChart(data) {
+            if (!data.nodes.length) return;
+            
+            const sortedNodes = data.nodes
+                .sort((a, b) => b.metrics.complexity - a.metrics.complexity)
+                .slice(0, 20); // Top 20 most complex files
+                
+            const trace = {
+                x: sortedNodes.map(n => n.label),
+                y: sortedNodes.map(n => n.metrics.complexity),
+                type: 'bar',
+                marker: {
+                    color: sortedNodes.map(n => n.metrics.complexity),
+                    colorscale: 'Viridis',
+                    colorbar: {
+                        title: 'Complexity',
+                        titlefont: { color: 'white' },
+                        tickfont: { color: 'white' }
+                    }
+                },
+                text: sortedNodes.map(n => `${n.metrics.lines} lines`),
+                textposition: 'auto'
+            };
+            
+            const layout = {
+                title: {
+                    text: 'File Complexity Analysis',
+                    font: { color: 'white', size: 16 }
+                },
+                xaxis: { 
+                    title: 'Files',
+                    titlefont: { color: 'white' },
+                    tickfont: { color: 'white' },
+                    tickangle: -45
+                },
+                yaxis: { 
+                    title: 'Complexity Score',
+                    titlefont: { color: 'white' },
+                    tickfont: { color: 'white' }
+                },
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0.05)',
+                margin: { t: 50, l: 60, r: 30, b: 120 }
+            };
+            
+            const config = {
+                responsive: true,
+                displayModeBar: false,
+                scrollZoom: false
+            };
+            
+            Plotly.newPlot('complexity-chart', [trace], layout, config);
+        }
+        
+        function updateMetricsView(metrics) {
+            if (!metrics) return;
+            
+            // Update complex files
+            const complexFilesEl = document.getElementById('complex-files-list');
+            if (metrics.files_by_complexity) {
+                complexFilesEl.innerHTML = metrics.files_by_complexity.map((item, index) => `
+                    <div class="flex justify-between items-center p-2 bg-white bg-opacity-5 rounded">
+                        <div class="flex items-center space-x-2">
+                            <span class="text-xs text-gray-400">${index + 1}</span>
+                            <span class="text-white text-sm">${item.file}</span>
+                        </div>
+                        <span class="text-orange-300 text-sm font-medium">${item.complexity.toFixed(2)}</span>
+                    </div>
+                `).join('');
+            }
+            
+            // Update large files
+            const largeFilesEl = document.getElementById('large-files-list');
+            if (metrics.largest_files) {
+                largeFilesEl.innerHTML = metrics.largest_files.map((item, index) => `
+                    <div class="flex justify-between items-center p-2 bg-white bg-opacity-5 rounded">
+                        <div class="flex items-center space-x-2">
+                            <span class="text-xs text-gray-400">${index + 1}</span>
+                            <span class="text-white text-sm">${item.file}</span>
+                        </div>
+                        <span class="text-blue-300 text-sm font-medium">${item.lines.toLocaleString()}L</span>
+                    </div>
+                `).join('');
+            }
+            
+            // Update connected files
+            const connectedFilesEl = document.getElementById('connected-files-list');
+            if (metrics.most_imports) {
+                connectedFilesEl.innerHTML = metrics.most_imports.map((item, index) => `
+                    <div class="flex justify-between items-center p-2 bg-white bg-opacity-5 rounded">
+                        <div class="flex items-center space-x-2">
+                            <span class="text-xs text-gray-400">${index + 1}</span>
+                            <span class="text-white text-sm">${item.file}</span>
+                        </div>
+                        <span class="text-green-300 text-sm font-medium">${item.imports}</span>
+                    </div>
+                `).join('');
+            }
+            
+            // Update size distribution
+            const sizeDistEl = document.getElementById('size-distribution');
+            if (analysisData.summary && analysisData.summary.file_size_distribution) {
+                const dist = analysisData.summary.file_size_distribution;
+                sizeDistEl.innerHTML = `
+                    <div class="space-y-3">
+                        <div class="flex justify-between items-center">
+                            <span class="text-white text-sm">Small files (&lt;100 lines)</span>
+                            <span class="text-green-300 font-medium">${dist.small_files || 0}</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-white text-sm">Medium files (100-500 lines)</span>
+                            <span class="text-yellow-300 font-medium">${dist.medium_files || 0}</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-white text-sm">Large files (>500 lines)</span>
+                            <span class="text-red-300 font-medium">${dist.large_files || 0}</span>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+        
+        function switchView(view) {
+            currentView = view;
+            
+            // Update tab styles
+            ['network', 'treemap', 'complexity', 'metrics'].forEach(v => {
+                const tab = document.getElementById(`${v}-tab`);
+                const viewEl = document.getElementById(`${v}-view`);
+                
+                if (v === view) {
+                    tab.classList.add('bg-white', 'bg-opacity-20');
+                    viewEl.classList.remove('hidden');
+                } else {
+                    tab.classList.remove('bg-white', 'bg-opacity-20');
+                    viewEl.classList.add('hidden');
+                }
+            });
+            
+            // Load view-specific content if needed
+            if (view === 'treemap' && !document.getElementById('treemap-chart').hasChildNodes()) {
+                showLoading('treemap');
+                setTimeout(() => {
+                    createTreemap(analysisData);
+                    hideLoading('treemap');
+                }, 100);
+            } else if (view === 'complexity' && !document.getElementById('complexity-chart').hasChildNodes()) {
+                showLoading('complexity');
+                setTimeout(() => {
+                    createComplexityChart(analysisData);
+                    hideLoading('complexity');
+                }, 100);
+            }
+        }
+        
+        // Search functionality
+        function setupSearch() {
+            const searchInput = document.getElementById('search');
+            const nodeTypeFilter = document.getElementById('node-type-filter');
+            
+            searchInput.addEventListener('input', debounceSearch);
+            nodeTypeFilter.addEventListener('change', debounceSearch);
+        }
+        
+        function debounceSearch() {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(performSearch, 300);
+        }
+        
+        async function performSearch() {
+            const query = document.getElementById('search').value.trim();
+            const nodeType = document.getElementById('node-type-filter').value;
+            
+            if (query.length < 2 && !nodeType) {
+                hideSearchResults();
+                return;
+            }
+            
+            try {
+                const params = new URLSearchParams();
+                if (query) params.append('q', query);
+                if (nodeType) params.append('type', nodeType);
+                
+                const response = await fetch(`/api/search/${analysisId}?${params}`);
+                const data = await response.json();
+                
+                displaySearchResults(data.results);
+                
+                // Highlight nodes in network view
+                if (network && currentView === 'network') {
+                    highlightSearchResults(data.results);
+                }
+                
+            } catch (error) {
+                console.error('Search error:', error);
+                showError('Search failed');
+            }
+        }
+        
+        function displaySearchResults(results) {
+            const resultsContainer = document.getElementById('search-results');
+            const resultsList = document.getElementById('search-results-list');
+            
+            if (results.length === 0) {
+                hideSearchResults();
+                return;
+            }
+            
+            resultsList.innerHTML = results.slice(0, 20).map(result => `
+                <div class="file-item p-2 rounded cursor-pointer text-sm" 
+                     onclick="selectSearchResult('${result.id}')">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-2">
+                            <i class="fas fa-code text-green-300 text-xs"></i>
+                            <span class="text-white">${result.name || result.type}</span>
+                        </div>
+                        <span class="text-gray-400 text-xs">${result.type}</span>
+                    </div>
+                    <div class="text-xs text-gray-400 mt-1">
+                        Line ${result.line} in ${result.file.split('/').pop()}
+                    </div>
+                </div>
+            `).join('');
+            
+            resultsContainer.classList.remove('hidden');
+        }
+        
+        function hideSearchResults() {
+            document.getElementById('search-results').classList.add('hidden');
+            clearHighlights();
+        }
+        
+        function selectFile(fileId) {
+            if (network) {
+                network.selectNodes([fileId]);
+                network.focus(fileId, {animation: true});
+            }
+        }
+        
+        function selectSearchResult(nodeId) {
+            // Implementation depends on how you want to show individual nodes
+            console.log('Selected search result:', nodeId);
+        }
+        
+        function highlightSearchResults(results) {
+            if (!network) return;
+            
+            const nodeIds = [...new Set(results.map(r => r.file))];
+            network.selectNodes(nodeIds);
+        }
+        
+        function highlightNode(nodeId) {
+            console.log('Highlighted node:', nodeId);
+        }
+        
+        function clearHighlights() {
+            if (network) {
+                network.unselectAll();
+            }
+        }
+        
+        async function exportAnalysis() {
+            try {
+                const response = await fetch(`/api/export/${analysisId}`);
+                if (!response.ok) throw new Error('Export failed');
+                
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `ast_analysis_${analysisId}.json`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+                
+            } catch (error) {
+                console.error('Export error:', error);
+                showError('Export failed');
+            }
+        }
+        
+        function showLoading(viewType) {
+            const loadingEl = document.getElementById(`${viewType}-loading`);
+            if (loadingEl) {
+                loadingEl.classList.remove('hidden');
+                
+                // FALLBACK: Auto-hide loading after 30 seconds as a safety net
+                setTimeout(() => {
+                    if (!loadingEl.classList.contains('hidden')) {
+                        console.warn('Loading state auto-dismissed after timeout');
+                        hideLoading(viewType);
+                    }
+                }, 30000); // 30 second safety timeout
+            }
+        }
+        
+        function hideLoading(viewType) {
+            const loadingEl = document.getElementById(`${viewType}-loading`);
+            if (loadingEl) {
+                loadingEl.classList.add('hidden');
+                console.log(`Loading dismissed for: ${viewType}`);
+            } else {
+                console.warn(`Loading element not found for: ${viewType}`);
+            }
+        }
+        
+        function showError(message) {
+            // You could implement a toast notification system here
+            console.error(message);
+            alert(message); // Simple fallback
+        }
+        
+        // MEMORY OPTIMIZATION: Add file list pagination function
+        let currentFileData = [];
+        let currentFileOffset = 25; // Start from second page
+        
+        // AST Viewer Variables
+        let currentFileAST = null;
+        let astSearchTimeout = null;
+        
+        // AST VIEWER FUNCTIONS
+        
+        async function openFileAST(fileId, fileName) {
+            console.log('Opening AST for file:', fileName, 'with ID:', fileId);
+            
+            // Switch to AST view
+            switchToASTView();
+            
+            // Update file name in navigation bar
+            document.getElementById('ast-file-name').textContent = fileName;
+            
+            // Show loading state
+            showASTLoading();
+            
+            try {
+                // Use fileId (which should be the file path) or fallback to fileName
+                const filePath = fileId || fileName;
+                const encodedFilePath = encodeURIComponent(filePath);
+                console.log('Fetching AST from:', `/api/file/${analysisId}/${encodedFilePath}`);
+                
+                const response = await fetch(`/api/file/${analysisId}/${encodedFilePath}`);
+                
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+                    throw new Error(`Failed to load file AST (${response.status}): ${errorData.error || 'Unknown error'}`);
+                }
+                
+                const fileData = await response.json();
+                currentFileAST = fileData;
+                
+                console.log('Received file data:', fileData);
+                
+                // Update file info
+                updateFileInfo(fileData);
+                
+                // Load and display AST-based code representation
+                await loadSourceCode(fileData);
+                
+                // Load and display actual source code
+                await loadActualSourceCode(filePath, fileName);
+                
+                // Build and display AST tree
+                buildASTTree(fileData);
+                
+            } catch (error) {
+                console.error('Error loading file AST:', error);
+                showASTError('Failed to load AST structure: ' + error.message);
+            }
+        }
+        
+        function switchToASTView() {
+            // Hide repository view
+            document.getElementById('repository-view').classList.add('hidden');
+            
+            // Show AST navigation bar and split view
+            document.getElementById('ast-navigation-bar').classList.remove('hidden');
+            document.getElementById('ast-split-view').classList.remove('hidden');
+        }
+        
+        function closeFileAST() {
+            // Hide AST view
+            document.getElementById('ast-navigation-bar').classList.add('hidden');
+            document.getElementById('ast-split-view').classList.add('hidden');
+            
+            // Show repository view
+            document.getElementById('repository-view').classList.remove('hidden');
+            
+            currentFileAST = null;
+            
+            // Clear search
+            document.getElementById('ast-search').value = '';
+        }
+        
+        function updateFileInfo(fileData) {
+            const lineCount = fileData.lines || 0;
+            const sizeKB = fileData.size_bytes ? (fileData.size_bytes / 1024).toFixed(1) : '0';
+            
+            document.getElementById('code-line-count').textContent = `${lineCount} lines`;
+            document.getElementById('code-file-size').textContent = `${sizeKB} KB`;
+        }
+        
+        async function loadSourceCode(fileData) {
+            const codeDisplay = document.getElementById('code-display');
+            
+            try {
+                // Generate AST-based code representation
+                const codeLines = generateCodeRepresentation(fileData);
+                
+                codeDisplay.innerHTML = `
+                    <div class="text-green-400 text-xs mb-4">
+                        # AST-based code representation
+                        # Lines: ${fileData.lines}, Complexity: ${fileData.complexity?.toFixed(2) || 'N/A'}
+                    </div>
+                    ${codeLines}
+                `;
+                
+            } catch (error) {
+                console.error('Error loading AST representation:', error);
+                codeDisplay.innerHTML = `
+                    <div class="text-red-400">
+                        <i class="fas fa-exclamation-triangle mr-2"></i>
+                        Failed to load AST representation: ${error.message}
+                    </div>
+                `;
+            }
+        }
+        
+        async function loadActualSourceCode(filePath, fileName) {
+            const sourceDisplay = document.getElementById('source-display');
+            const sourceLineCount = document.getElementById('source-line-count');
+            const sourceEncoding = document.getElementById('source-encoding');
+            
+            try {
+                console.log('Loading actual source code for:', filePath);
+                const encodedFilePath = encodeURIComponent(filePath);
+                const response = await fetch(`/api/source/${analysisId}/${encodedFilePath}`);
+                
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+                    throw new Error(`Failed to load source code (${response.status}): ${errorData.error || 'Unknown error'}`);
+                }
+                
+                const sourceData = await response.json();
+                
+                // Update source info
+                sourceLineCount.textContent = `${sourceData.lines || 0} lines`;
+                sourceEncoding.textContent = sourceData.encoding || 'UTF-8';
+                
+                if (sourceData.error) {
+                    sourceDisplay.innerHTML = `
+                        <div class="text-yellow-400 text-sm mb-4 p-3 bg-yellow-900 bg-opacity-20 rounded">
+                            <i class="fas fa-exclamation-triangle mr-2"></i>
+                            ${sourceData.error}
+                        </div>
+                        <div class="code-panel p-0">
+                            ${formatSourceCode(sourceData.source || '# No source available', fileName)}
+                        </div>
+                    `;
+                } else {
+                    // Display actual source code with syntax highlighting
+                    const formattedSource = formatSourceCode(sourceData.source, fileName);
+                    sourceDisplay.innerHTML = formattedSource;
+                    
+                    // Setup synchronized scrolling between panels
+                    setupSynchronizedScrolling();
+                }
+                
+            } catch (error) {
+                console.error('Error loading actual source code:', error);
+                sourceDisplay.innerHTML = `
+                    <div class="text-red-400">
+                        <i class="fas fa-exclamation-triangle mr-2"></i>
+                        Failed to load source code: ${error.message}
+                    </div>
+                `;
+                sourceLineCount.textContent = '-- lines';
+                sourceEncoding.textContent = 'Error';
+            }
+        }
+        
+        function formatSourceCode(sourceCode, fileName) {
+            if (!sourceCode) {
+                return '<div class="text-gray-400">No source code available</div>';
+            }
+            
+            const lines = sourceCode.split('\n');
+            const maxLineNumber = lines.length;
+            const lineNumberWidth = Math.max(3, maxLineNumber.toString().length);
+            
+            let formattedHtml = '';
+            
+            lines.forEach((line, index) => {
+                const lineNumber = index + 1;
+                const paddedLineNumber = lineNumber.toString().padStart(lineNumberWidth, ' ');
+                
+                // Apply enhanced syntax highlighting
+                const highlightedLine = applySyntaxHighlighting(line, fileName);
+                
+                formattedHtml += `
+                    <div class="code-line" data-source-line="${lineNumber}" id="source-line-${lineNumber}">
+                        <span class="line-number">${paddedLineNumber}</span>
+                        <div class="line-content">${highlightedLine}</div>
+                    </div>
+                `;
+            });
+            
+            console.log('formatSourceCode returning HTML (first 300 chars):', formattedHtml.substring(0, 300));
+            return formattedHtml;
+        }
+        
+        function applySyntaxHighlighting(line, fileName) {
+            // Check if line is already HTML-encoded (to prevent double encoding)
+            const isAlreadyEncoded = line.includes('&lt;') || line.includes('&gt;') || line.includes('&amp;');
+            
+            // Escape HTML first (only if not already encoded)
+            let highlighted = isAlreadyEncoded ? line : line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            
+            // Determine file type
+            const extension = fileName.split('.').pop().toLowerCase();
+            
+            if (extension === 'py') {
+                // Enhanced Python syntax highlighting
+                highlighted = highlighted
+                    // Comments (must come first)
+                    .replace(/(#.*$)/g, '<span class="syntax-comment">$1</span>')
+                    // Multi-line strings
+                    .replace(/("""[\s\S]*?""")/g, '<span class="syntax-string">$1</span>')
+                    .replace(/('''[\s\S]*?''')/g, '<span class="syntax-string">$1</span>')
+                    // Single/double quoted strings
+                    .replace(/(['"])((?:\\.|(?!\1)[^\\])*?)\1/g, '<span class="syntax-string">$1$2$1</span>')
+                    // Import statements
+                    .replace(/\b(import|from)\b/g, '<span class="syntax-import">$1</span>')
+                    // Keywords
+                    .replace(/\b(def|class|if|elif|else|for|while|try|except|finally|with|as|return|yield|break|continue|pass|and|or|not|in|is|lambda|async|await|global|nonlocal|assert|del|raise)\b/g, '<span class="syntax-keyword">$1</span>')
+                    // Built-in constants
+                    .replace(/\b(None|True|False|__name__|__main__)\b/g, '<span class="syntax-keyword">$1</span>')
+                    // Built-in functions
+                    .replace(/\b(print|len|str|int|float|list|dict|tuple|set|bool|type|isinstance|hasattr|getattr|setattr|open|range|enumerate|zip|map|filter|sorted|sum|max|min|abs|round|all|any)\s*(?=\()/g, '<span class="syntax-builtin">$1</span>')
+                    // Decorators
+                    .replace(/(@\w+)/g, '<span class="syntax-decorator">$1</span>')
+                    // Function definitions
+                    .replace(/(\bdef\s+)(\w+)/g, '$1<span class="syntax-function">$2</span>')
+                    // Class definitions  
+                    .replace(/(\bclass\s+)(\w+)/g, '$1<span class="syntax-class">$2</span>')
+                    // Numbers (integers, floats, hex, binary)
+                    .replace(/\b(0x[0-9a-fA-F]+|0b[01]+|\d+\.?\d*(?:[eE][+-]?\d+)?)\b/g, '<span class="syntax-number">$1</span>')
+                    // Operators (avoid matching < and > inside HTML tags)
+                    .replace(/([+\-*/%=!&|^~])/g, '<span class="syntax-operator">$1</span>')
+                    
+            } else if (['js', 'ts', 'jsx', 'tsx'].includes(extension)) {
+                // Enhanced JavaScript/TypeScript syntax highlighting
+                highlighted = highlighted
+                    // Comments
+                    .replace(/(\/\/.*$)/g, '<span class="syntax-comment">$1</span>')
+                    .replace(/(\/\*[\s\S]*?\*\/)/g, '<span class="syntax-comment">$1</span>')
+                    // Template literals
+                    .replace(/(`)((?:\\.|(?!\1)[^\\])*?)\1/g, '<span class="syntax-string">$1$2$1</span>')
+                    // Strings
+                    .replace(/(['"])((?:\\.|(?!\1)[^\\])*?)\1/g, '<span class="syntax-string">$1$2$1</span>')
+                    // Import/export
+                    .replace(/\b(import|export|from|require)\b/g, '<span class="syntax-import">$1</span>')
+                    // Keywords
+                    .replace(/\b(function|const|let|var|if|else|for|while|do|switch|case|default|break|continue|return|try|catch|finally|throw|new|class|extends|async|await|typeof|instanceof|this|super|static|public|private|protected|interface|type|enum)\b/g, '<span class="syntax-keyword">$1</span>')
+                    // Built-in constants
+                    .replace(/\b(true|false|null|undefined|NaN|Infinity)\b/g, '<span class="syntax-keyword">$1</span>')
+                    // Built-in functions
+                    .replace(/\b(console|document|window|Math|JSON|Object|Array|String|Number|Boolean|Date|RegExp|Error|Promise)\b/g, '<span class="syntax-builtin">$1</span>')
+                    // Function declarations
+                    .replace(/(\bfunction\s+)(\w+)/g, '$1<span class="syntax-function">$2</span>')
+                    .replace(/(\w+)(\s*=\s*(?:async\s+)?(?:function|\([^)]*\)\s*=>))/g, '<span class="syntax-function">$1</span>$2')
+                    // Class names
+                    .replace(/(\bclass\s+)(\w+)/g, '$1<span class="syntax-class">$2</span>')
+                    // Numbers
+                    .replace(/\b(\d+\.?\d*(?:[eE][+-]?\d+)?)\b/g, '<span class="syntax-number">$1</span>')
+                    // Operators (avoid matching < and > inside HTML tags)
+                    .replace(/([+\-*/%=!&|^~])/g, '<span class="syntax-operator">$1</span>')
+                    
+            } else {
+                // Generic syntax highlighting for other languages
+                highlighted = highlighted
+                    // Comments
+                    .replace(/(#.*$|\/\/.*$|\/\*[\s\S]*?\*\/)/g, '<span class="syntax-comment">$1</span>')
+                    // Strings
+                    .replace(/(['"`])((?:\\.|(?!\1)[^\\])*?)\1/g, '<span class="syntax-string">$1$2$1</span>')
+                    // Numbers
+                    .replace(/\b(\d+\.?\d*)\b/g, '<span class="syntax-number">$1</span>');
+            }
+            
+            
+            return highlighted || '&nbsp;'; // Ensure empty lines still have height
+        }
+        
+        function setupSynchronizedScrolling() {
+            const codeDisplay = document.getElementById('code-display');
+            const sourceDisplay = document.getElementById('source-display');
+            
+            let isScrolling = false;
+            
+            // Synchronized scrolling between AST representation and source code
+            codeDisplay.addEventListener('scroll', function() {
+                if (isScrolling) return;
+                isScrolling = true;
+                
+                const scrollPercentage = this.scrollTop / (this.scrollHeight - this.clientHeight);
+                const targetScrollTop = scrollPercentage * (sourceDisplay.scrollHeight - sourceDisplay.clientHeight);
+                
+                sourceDisplay.scrollTop = targetScrollTop;
+                
+                setTimeout(() => { isScrolling = false; }, 50);
+            });
+            
+            sourceDisplay.addEventListener('scroll', function() {
+                if (isScrolling) return;
+                isScrolling = true;
+                
+                const scrollPercentage = this.scrollTop / (this.scrollHeight - this.clientHeight);
+                const targetScrollTop = scrollPercentage * (codeDisplay.scrollHeight - codeDisplay.clientHeight);
+                
+                codeDisplay.scrollTop = targetScrollTop;
+                
+                setTimeout(() => { isScrolling = false; }, 50);
+            });
+            
+            console.log('Synchronized scrolling setup complete');
+        }
+        
+        function generateCodeRepresentation(fileData) {
+            if (!fileData.nodes || fileData.nodes.length === 0) {
+                return '<div class="text-gray-400">No AST nodes available</div>';
+            }
+            
+            // Group nodes by line number and generate a code-like representation
+            const nodesByLine = {};
+            fileData.nodes.forEach(node => {
+                const line = node.line || 1;
+                if (!nodesByLine[line]) {
+                    nodesByLine[line] = [];
+                }
+                nodesByLine[line].push(node);
+            });
+            
+            const maxLine = Math.max(...Object.keys(nodesByLine).map(Number));
+            let codeHtml = '';
+            
+            for (let lineNum = 1; lineNum <= Math.min(maxLine, 500); lineNum++) {
+                const nodes = nodesByLine[lineNum] || [];
+                const hasNodes = nodes.length > 0;
+                
+                let lineContent = '';
+                if (hasNodes) {
+                    // Create a representation based on the node types
+                    lineContent = nodes.map(node => {
+                        const indent = '  '.repeat(Math.max(0, (node.col || 0) / 4));
+                        let content = '';
+                        
+                        switch (node.type) {
+                            case 'FunctionDef':
+                            case 'AsyncFunctionDef':
+                                content = `<span class="text-blue-400">def ${node.name || 'function'}():</span>`;
+                                break;
+                            case 'ClassDef':
+                                content = `<span class="text-green-400">class ${node.name || 'Class'}:</span>`;
+                                break;
+                            case 'Import':
+                                content = `<span class="text-yellow-400">import ${node.name || 'module'}</span>`;
+                                break;
+                            case 'ImportFrom':
+                                content = `<span class="text-yellow-400">from ${node.name || 'module'} import ...</span>`;
+                                break;
+                            case 'If':
+                                content = `<span class="text-orange-400">if condition:</span>`;
+                                break;
+                            case 'For':
+                                content = `<span class="text-red-400">for item in items:</span>`;
+                                break;
+                            case 'While':
+                                content = `<span class="text-red-400">while condition:</span>`;
+                                break;
+                            case 'Try':
+                                content = `<span class="text-pink-400">try:</span>`;
+                                break;
+                            case 'Return':
+                                content = `<span class="text-purple-400">return ${node.name || 'value'}</span>`;
+                                break;
+                            case 'Assign':
+                                content = `<span class="text-gray-300">${node.name || 'variable'} = value</span>`;
+                                break;
+                            default:
+                                content = `<span class="text-gray-400"># ${node.type}: ${node.name || ''}</span>`;
+                        }
+                        
+                        return indent + content;
+                    }).join('<br>');
+                } else {
+                    lineContent = '<span class="text-gray-600"># ...</span>';
+                }
+                
+                codeHtml += `
+                    <div class="code-line" data-line="${lineNum}" id="code-line-${lineNum}">
+                        <span class="line-number">${lineNum}</span>
+                        <div class="line-content">${lineContent}</div>
+                    </div>
+                `;
+            }
+            
+            if (maxLine > 500) {
+                codeHtml += `
+                    <div class="text-gray-400 text-center mt-4">
+                        ... and ${maxLine - 500} more lines
+                    </div>
+                `;
+            }
+            
+            return codeHtml;
+        }
+        
+        function showASTLoading() {
+            const astTree = document.getElementById('ast-tree');
+            astTree.innerHTML = `
+                <div class="flex items-center justify-center h-full">
+                    <div class="text-center">
+                        <div class="spinner border-4 border-white border-opacity-30 rounded-full w-8 h-8 mb-3 mx-auto"></div>
+                        <p>Loading AST structure...</p>
+                    </div>
+                </div>
+            `;
+        }
+        
+        function showASTError(message) {
+            const astTree = document.getElementById('ast-tree');
+            astTree.innerHTML = `
+                <div class="flex items-center justify-center h-full">
+                    <div class="text-center text-red-400">
+                        <i class="fas fa-exclamation-triangle text-2xl mb-3"></i>
+                        <p>${message}</p>
+                    </div>
+                </div>
+            `;
+        }
+        
+        function buildASTTree(fileData) {
+            console.log('Building AST tree for:', fileData);
+            
+            if (!fileData.nodes || fileData.nodes.length === 0) {
+                showASTError('No AST nodes found in this file');
+                return;
+            }
+            
+            // Build hierarchical structure
+            const astHierarchy = buildASTHierarchy(fileData.nodes);
+            
+            // Render tree
+            const astTree = document.getElementById('ast-tree');
+            astTree.innerHTML = renderASTNodes(astHierarchy, 0);
+            
+            // Setup search
+            setupASTSearch();
+        }
+        
+        function buildASTHierarchy(nodes) {
+            // Group nodes by type and build hierarchy
+            const hierarchy = [];
+            const nodeMap = {};
+            
+            // Create node map
+            nodes.forEach(node => {
+                nodeMap[node.id] = {
+                    ...node,
+                    children: []
+                };
+            });
+            
+            // Build hierarchy based on line numbers and nesting
+            const sortedNodes = nodes.sort((a, b) => a.line - b.line);
+            const stack = [];
+            
+            sortedNodes.forEach(node => {
+                const nodeWithChildren = nodeMap[node.id];
+                
+                // Find parent based on nesting and line numbers
+                while (stack.length > 0 && !isNodeChild(stack[stack.length - 1], node)) {
+                    stack.pop();
+                }
+                
+                if (stack.length > 0) {
+                    stack[stack.length - 1].children.push(nodeWithChildren);
+                } else {
+                    hierarchy.push(nodeWithChildren);
+                }
+                
+                // Add to stack if it can have children
+                if (canHaveChildren(node.type)) {
+                    stack.push(nodeWithChildren);
+                }
+            });
+            
+            return hierarchy;
+        }
+        
+        function isNodeChild(parentNode, childNode) {
+            // Simple heuristic: child should be after parent and within reasonable line distance
+            const lineDistance = childNode.line - parentNode.line;
+            return lineDistance > 0 && lineDistance < 1000 && 
+                   ['FunctionDef', 'ClassDef', 'AsyncFunctionDef', 'Module', 'If', 'For', 'While', 'Try', 'With'].includes(parentNode.type);
+        }
+        
+        function canHaveChildren(nodeType) {
+            return ['FunctionDef', 'ClassDef', 'AsyncFunctionDef', 'Module', 'If', 'For', 'While', 'Try', 'With', 'ExceptHandler'].includes(nodeType);
+        }
+        
+        function renderASTNodes(nodes, depth) {
+            return nodes.map(node => {
+                const hasChildren = node.children && node.children.length > 0;
+                const indent = '  '.repeat(depth);
+                const nodeIcon = getNodeIcon(node.type);
+                const nodeColor = getNodeTypeColor(node.type);
+                
+                return `
+                    <div class="ast-node mb-1" data-node-id="${node.id}">
+                        <div class="flex items-center space-x-2 p-2 rounded hover:bg-white hover:bg-opacity-10 cursor-pointer"
+                             onclick="selectASTNode('${node.id}')"
+                             style="margin-left: ${depth * 20}px">
+                            ${hasChildren ? 
+                                `<i class="fas fa-chevron-right ast-toggle text-xs cursor-pointer" onclick="toggleASTNode(event, '${node.id}')"></i>` :
+                                `<span class="w-3"></span>`
+                            }
+                            <i class="fas ${nodeIcon} ${nodeColor} text-sm"></i>
+                            <span class="text-white font-medium">${node.name || node.type}</span>
+                            <span class="text-gray-400 text-xs">:${node.line}</span>
+                            ${node.complexity ? `<span class="text-yellow-400 text-xs">⚡${node.complexity}</span>` : ''}
+                        </div>
+                        ${hasChildren ? 
+                            `<div class="ast-children hidden" id="children-${node.id}">
+                                ${renderASTNodes(node.children, depth + 1)}
+                            </div>` : ''
+                        }
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        function getNodeIcon(nodeType) {
+            const icons = {
+                'Module': 'fa-file-code',
+                'FunctionDef': 'fa-function',
+                'AsyncFunctionDef': 'fa-function',
+                'ClassDef': 'fa-cube',
+                'Import': 'fa-download',
+                'ImportFrom': 'fa-download',
+                'If': 'fa-code-branch',
+                'For': 'fa-redo',
+                'While': 'fa-redo',
+                'Try': 'fa-shield-alt',
+                'With': 'fa-brackets-curly',
+                'Return': 'fa-reply',
+                'Assign': 'fa-equals',
+                'Call': 'fa-phone'
+            };
+            return icons[nodeType] || 'fa-code';
+        }
+        
+        function getNodeTypeColor(nodeType) {
+            const colors = {
+                'Module': 'text-purple-400',
+                'FunctionDef': 'text-blue-400',
+                'AsyncFunctionDef': 'text-blue-400',
+                'ClassDef': 'text-green-400',
+                'Import': 'text-yellow-400',
+                'ImportFrom': 'text-yellow-400',
+                'If': 'text-orange-400',
+                'For': 'text-red-400',
+                'While': 'text-red-400',
+                'Try': 'text-pink-400',
+                'With': 'text-indigo-400'
+            };
+            return colors[nodeType] || 'text-gray-400';
+        }
+        
+        function toggleASTNode(event, nodeId) {
+            event.stopPropagation();
+            
+            const toggle = event.target;
+            const children = document.getElementById(`children-${nodeId}`);
+            
+            if (children.classList.contains('hidden')) {
+                children.classList.remove('hidden');
+                toggle.classList.remove('fa-chevron-right');
+                toggle.classList.add('fa-chevron-down');
+            } else {
+                children.classList.add('hidden');
+                toggle.classList.remove('fa-chevron-down');
+                toggle.classList.add('fa-chevron-right');
+            }
+        }
+        
+        
+        function findNodeById(nodes, nodeId) {
+            for (const node of nodes) {
+                if (node.id === nodeId) {
+                    return node;
+                }
+            }
+            return null;
+        }
+        
+        function showNodeDetails(node) {
+            const detailsPanel = document.getElementById('ast-node-details');
+            
+            const propertiesHtml = Object.entries(node.properties || {})
+                .map(([key, value]) => `<div><span class="text-gray-400">${key}:</span> <span class="text-white">${value}</span></div>`)
+                .join('');
+            
+            detailsPanel.innerHTML = `
+                <div class="space-y-3">
+                    <div>
+                        <h4 class="text-white font-semibold mb-2">${node.name || node.type}</h4>
+                        <div class="text-sm space-y-1">
+                            <div><span class="text-gray-400">Type:</span> <span class="text-blue-400">${node.type}</span></div>
+                            <div><span class="text-gray-400">Line:</span> <span class="text-white">${node.line}</span></div>
+                            <div><span class="text-gray-400">Column:</span> <span class="text-white">${node.col}</span></div>
+                            ${node.complexity ? `<div><span class="text-gray-400">Complexity:</span> <span class="text-yellow-400">${node.complexity}</span></div>` : ''}
+                        </div>
+                    </div>
+                    
+                    ${propertiesHtml ? `
+                        <div>
+                            <h5 class="text-white font-medium mb-2">Properties</h5>
+                            <div class="text-sm space-y-1">
+                                ${propertiesHtml}
+                            </div>
+                        </div>
+                    ` : ''}
+                    
+                    <div>
+                        <button onclick="jumpToLine(${node.line})" class="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm">
+                            <i class="fas fa-external-link-alt mr-1"></i>Jump to Line ${node.line}
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+        
+        function setupASTSearch() {
+            const searchInput = document.getElementById('ast-search');
+            
+            searchInput.addEventListener('input', function() {
+                clearTimeout(astSearchTimeout);
+                astSearchTimeout = setTimeout(() => {
+                    const query = this.value.toLowerCase().trim();
+                    searchASTNodes(query);
+                }, 300);
+            });
+        }
+        
+        function searchASTNodes(query) {
+            const nodes = document.querySelectorAll('.ast-node');
+            
+            nodes.forEach(node => {
+                const nodeText = node.textContent.toLowerCase();
+                const shouldShow = !query || nodeText.includes(query);
+                
+                if (shouldShow) {
+                    node.style.display = 'block';
+                    node.classList.remove('opacity-50');
+                } else {
+                    node.style.display = 'none';
+                }
+            });
+        }
+        
+        function expandAllNodes() {
+            document.querySelectorAll('.ast-children').forEach(children => {
+                children.classList.remove('hidden');
+            });
+            
+            document.querySelectorAll('.ast-toggle').forEach(toggle => {
+                toggle.classList.remove('fa-chevron-right');
+                toggle.classList.add('fa-chevron-down');
+            });
+        }
+        
+        function collapseAllNodes() {
+            document.querySelectorAll('.ast-children').forEach(children => {
+                children.classList.add('hidden');
+            });
+            
+            document.querySelectorAll('.ast-toggle').forEach(toggle => {
+                toggle.classList.remove('fa-chevron-down');
+                toggle.classList.add('fa-chevron-right');
+            });
+        }
+        
+        function exportAST() {
+            if (!currentFileAST) return;
+            
+            const dataStr = JSON.stringify(currentFileAST, null, 2);
+            const dataBlob = new Blob([dataStr], {type: 'application/json'});
+            
+            const url = URL.createObjectURL(dataBlob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `ast_${currentFileAST.path.replace(/[^a-zA-Z0-9]/g, '_')}.json`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+        
+        function jumpToLine(lineNumber) {
+            // Scroll to the specific line in both code display and source display
+            const codeLineElement = document.getElementById(`code-line-${lineNumber}`);
+            const sourceLineElement = document.getElementById(`source-line-${lineNumber}`);
+            
+            // Remove previous highlights from both panels
+            document.querySelectorAll('.code-line').forEach(el => {
+                el.classList.remove('line-highlighted-yellow', 'line-highlighted-green', 'line-highlighted-blue');
+            });
+            
+            // Highlight and scroll in AST representation panel
+            if (codeLineElement) {
+                codeLineElement.classList.add('line-highlighted-yellow');
+                codeLineElement.scrollIntoView({ 
+                    behavior: 'smooth', 
+                    block: 'center' 
+                });
+            }
+            
+            // Highlight and scroll in source code panel
+            if (sourceLineElement) {
+                sourceLineElement.classList.add('line-highlighted-yellow');
+                sourceLineElement.scrollIntoView({ 
+                    behavior: 'smooth', 
+                    block: 'center' 
+                });
+            }
+                
+                // Flash effect
+                setTimeout(() => {
+                if (codeLineElement) {
+                    codeLineElement.classList.remove('line-highlighted-yellow');
+                    codeLineElement.classList.add('line-highlighted-blue');
+                }
+                if (sourceLineElement) {
+                    sourceLineElement.classList.remove('line-highlighted-yellow');
+                    sourceLineElement.classList.add('line-highlighted-blue');
+                }
+                }, 1000);
+                
+            console.log(`Jumped to line ${lineNumber} in both panels`);
+        }
+        
+        function selectASTNode(nodeId) {
+            // Find node in current AST data
+            const node = findNodeById(currentFileAST.nodes, nodeId);
+            if (!node) return;
+            
+            // Highlight selected node in AST tree
+            document.querySelectorAll('.ast-node .flex').forEach(el => {
+                el.classList.remove('bg-blue-600', 'bg-opacity-50');
+            });
+            
+            const selectedElement = document.querySelector(`[data-node-id="${nodeId}"] .flex`);
+            if (selectedElement) {
+                selectedElement.classList.add('bg-blue-600', 'bg-opacity-50');
+            }
+            
+            // Highlight corresponding line in both code panels
+            if (node.line) {
+                const codeLineElement = document.getElementById(`code-line-${node.line}`);
+                const sourceLineElement = document.getElementById(`source-line-${node.line}`);
+                
+                // Remove previous highlights from both panels
+                document.querySelectorAll('.code-line').forEach(el => {
+                    el.classList.remove('line-highlighted-green');
+                });
+                
+                // Highlight the corresponding lines in both panels
+                if (codeLineElement) {
+                    codeLineElement.classList.add('line-highlighted-green');
+                }
+                if (sourceLineElement) {
+                    sourceLineElement.classList.add('line-highlighted-green');
+                }
+            }
+            
+            // Show node details
+            showNodeDetails(node);
+        }
+        
+        function loadMoreFiles() {
+            const fileListEl = document.getElementById('file-list');
+            const pageSize = 25;
+            
+            if (currentFileOffset >= currentFileData.length) {
+                return; // No more files to load
+            }
+            
+            const nextPage = currentFileData.slice(currentFileOffset, currentFileOffset + pageSize);
+            
+            // Remove the "Load More" button
+            const loadMoreBtn = fileListEl.querySelector('button[onclick="loadMoreFiles()"]');
+            if (loadMoreBtn) {
+                loadMoreBtn.parentElement.remove();
+            }
+            
+            // Add new files
+            nextPage.forEach(file => {
+                const fileName = file.label;
+                const metrics = file.metrics;
+                
+                const fileElement = document.createElement('div');
+                fileElement.className = 'file-item p-2 rounded cursor-pointer text-sm';
+                fileElement.onclick = () => selectFile(file.id);
+                fileElement.title = `Lines: ${metrics.lines}, Complexity: ${metrics.complexity.toFixed(2)}`;
+                
+                fileElement.innerHTML = `
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-2">
+                            <i class="fas fa-file-code text-blue-300 text-xs"></i>
+                            <span class="text-white truncate">${fileName}</span>
+                        </div>
+                        <div class="text-gray-400 text-xs">
+                            ${metrics.lines}L
+                        </div>
+                    </div>
+                    <div class="flex justify-between mt-1 text-xs text-gray-400">
+                        <span>${metrics.classes}C ${metrics.functions}F</span>
+                        <span>⚡${metrics.complexity.toFixed(1)}</span>
+                    </div>
+                `;
+                
+                fileListEl.appendChild(fileElement);
+            });
+            
+            currentFileOffset += pageSize;
+            
+            // Add new "Load More" button if there are more files
+            if (currentFileOffset < currentFileData.length) {
+                const loadMoreDiv = document.createElement('div');
+                loadMoreDiv.className = 'mt-3 text-center';
+                loadMoreDiv.innerHTML = `
+                    <button onclick="loadMoreFiles()" class="px-3 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700">
+                        Load More (${currentFileData.length - currentFileOffset} remaining)
+                    </button>
+                `;
+                fileListEl.appendChild(loadMoreDiv);
+            }
+        }
+        
+        // Initialize visualization on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            setupSearch();
+            loadVisualization();
+        });
+        
+        // Handle window resize with throttling for better performance
+        let resizeTimeout;
+        window.addEventListener('resize', function() {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(function() {
+                if (network) {
+                    network.fit();
+                }
+            }, 250); // Throttle resize events
+        });
+    </script>
+</body>
+</html>
