@@ -1,106 +1,121 @@
-# AST Visualizer Makefile
+# MetaForge Makefile
 
-.PHONY: help install test run clean docker lint format check-env
-
-# Colors for terminal output
-RED=\033[0;31m
-GREEN=\033[0;32m
-YELLOW=\033[1;33m
-NC=\033[0m # No Color
-
-help: ## Show this help message
-	@echo "$(GREEN)AST Visualizer Development Commands$(NC)"
-	@echo ""
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-15s$(NC) %s\n", $$1, $$2}'
-
-install: ## Install dependencies
-	@echo "$(GREEN)Installing dependencies...$(NC)"
-	pip install -r requirements.txt
-	@echo "$(GREEN)✓ Dependencies installed$(NC)"
-
-check-env: ## Check environment configuration
-	@echo "$(GREEN)Checking environment...$(NC)"
-	@if [ -z "$$SECRET_KEY" ]; then \
-		echo "$(RED)✗ SECRET_KEY not set$(NC)"; \
-		echo "  Please set: export SECRET_KEY='your-secret-key'"; \
-		exit 1; \
-	else \
-		echo "$(GREEN)✓ SECRET_KEY is set$(NC)"; \
-	fi
-	@python -c "import redis; print('$(GREEN)✓ Redis library available$(NC)')" 2>/dev/null || echo "$(YELLOW)⚠ Redis library not available$(NC)"
-
-test: ## Run tests
-	@echo "$(GREEN)Running tests...$(NC)"
-	pytest -v
-	@echo "$(GREEN)✓ Tests completed$(NC)"
-
-test-cov: ## Run tests with coverage
-	@echo "$(GREEN)Running tests with coverage...$(NC)"
-	pytest --cov=. --cov-report=html --cov-report=term
-	@echo "$(GREEN)✓ Coverage report generated$(NC)"
-
-lint: ## Run linting
-	@echo "$(GREEN)Running linting...$(NC)"
-	pylint *.py || true
-	@echo "$(GREEN)✓ Linting completed$(NC)"
-
-format: ## Format code
-	@echo "$(GREEN)Formatting code...$(NC)"
-	black *.py
-	@echo "$(GREEN)✓ Code formatted$(NC)"
-
-run: check-env ## Run the application
-	@echo "$(GREEN)Starting AST Visualizer...$(NC)"
-	python run.py
-
-dev: check-env ## Run in development mode
-	@echo "$(GREEN)Starting in development mode...$(NC)"
-	FLASK_DEBUG=true python run.py
-
-docker: ## Build Docker image
-	@echo "$(GREEN)Building Docker image...$(NC)"
-	docker build -t ast-visualizer .
-	@echo "$(GREEN)✓ Docker image built$(NC)"
-
-docker-run: docker ## Run Docker container
-	@echo "$(GREEN)Running Docker container...$(NC)"
-	docker run -p 5000:5000 -e SECRET_KEY="dev-secret-key" ast-visualizer
-
-docker-dev: ## Run with docker-compose for development
-	@echo "$(GREEN)Starting development environment...$(NC)"
-	docker-compose up -d
-	@echo "$(GREEN)✓ Development environment started$(NC)"
-	@echo "  Access at: http://localhost:5000"
-
-docker-stop: ## Stop docker-compose services
-	@echo "$(GREEN)Stopping development environment...$(NC)"
-	docker-compose down
-	@echo "$(GREEN)✓ Development environment stopped$(NC)"
-
-clean: ## Clean up temporary files
-	@echo "$(GREEN)Cleaning up...$(NC)"
-	find . -type f -name "*.pyc" -delete
-	find . -type d -name "__pycache__" -delete
-	rm -rf .pytest_cache
-	rm -rf htmlcov
-	rm -rf .coverage
-	rm -f ast_visualizer.log
-	@echo "$(GREEN)✓ Cleanup completed$(NC)"
-
-init: ## Initialize development environment
-	@echo "$(GREEN)Initializing development environment...$(NC)"
-	@if [ ! -f .env ]; then \
-		cp env.example .env; \
-		echo "$(YELLOW)Created .env file from template$(NC)"; \
-		echo "$(YELLOW)Please edit .env with your configuration$(NC)"; \
-	fi
-	make install
-	@echo "$(GREEN)✓ Development environment initialized$(NC)"
-	@echo ""
-	@echo "$(YELLOW)Next steps:$(NC)"
-	@echo "  1. Edit .env file with your settings"
-	@echo "  2. Export SECRET_KEY: export SECRET_KEY='your-secret-key'"
-	@echo "  3. Run: make dev"
+.PHONY: help up down logs clean clean-light clean-deep restart status db-shell redis-shell pgadmin
 
 # Default target
-.DEFAULT_GOAL := help
+help:
+	@echo "MetaForge Docker Management"
+	@echo "=========================="
+	@echo "Available commands:"
+	@echo "  up          - Start all services"
+	@echo "  down        - Stop all services"
+	@echo "  restart     - Restart all services"
+	@echo "  logs        - Show logs for all services"
+	@echo "  status      - Show status of all services"
+	@echo "  clean-light - Clean Python artifacts and cache"
+	@echo "  clean       - Clean containers, volumes, and artifacts"
+	@echo "  clean-deep  - Deep clean (removes everything including images)"
+	@echo "  db-shell    - Connect to PostgreSQL shell"
+	@echo "  redis-shell - Connect to Redis shell"
+	@echo "  pgadmin     - Start pgAdmin (with tools profile)"
+	@echo "  setup       - Initial setup (copy env file)"
+
+# Start services
+up:
+	docker compose up -d
+
+# Stop services
+down:
+	docker compose down
+
+# Restart services
+restart:
+	docker compose restart
+
+# Show logs
+logs:
+	docker compose logs -f
+
+# Show status
+status:
+	docker compose ps
+
+# Light cleanup - Python artifacts and cache (safe)
+clean-light:
+	@echo "🧹 Cleaning Python artifacts and cache..."
+	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+	find . -type f -name "*.pyc" -delete 2>/dev/null || true
+	find . -type f -name "*.pyo" -delete 2>/dev/null || true
+	find . -type d -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true
+	rm -rf .pytest_cache
+	rm -rf .coverage
+	rm -rf htmlcov/
+	rm -rf .mypy_cache
+	rm -rf .ruff_cache
+	rm -rf build/
+	rm -rf dist/
+	@echo "✅ Light cleanup completed"
+
+# Standard cleanup - containers, volumes, and artifacts
+clean:
+	@echo "🧹 Starting standard cleanup..."
+	@$(MAKE) clean-light
+	@echo "🐳 Stopping and removing containers and volumes..."
+	docker compose down -v --remove-orphans
+	@echo "⚠️  This will remove unused Docker resources (containers, networks, images)."
+	@echo "💡 Use 'make clean-deep' for more aggressive cleanup including images."
+	@read -p "Continue with Docker system prune? (y/N): " confirm && [ "$$confirm" = "y" ] || [ "$$confirm" = "Y" ] || (echo "❌ Cleanup cancelled"; exit 1)
+	docker system prune -f
+	@echo "✅ Standard cleanup completed"
+
+# Deep cleanup - removes everything including Docker images
+clean-deep:
+	@echo "🧹 Starting deep cleanup..."
+	@$(MAKE) clean-light
+	@echo "🐳 Stopping and removing all containers, volumes, and networks..."
+	docker compose down -v --remove-orphans
+	@echo "⚠️  WARNING: This will remove ALL unused Docker resources including:"
+	@echo "   - All stopped containers"
+	@echo "   - All unused networks"
+	@echo "   - All unused images (not just dangling)"
+	@echo "   - All unused build cache"
+	@echo ""
+	@read -p "Are you absolutely sure? This action cannot be undone! (y/N): " confirm && [ "$$confirm" = "y" ] || [ "$$confirm" = "Y" ] || (echo "❌ Deep cleanup cancelled"; exit 1)
+	docker system prune -af --volumes
+	@echo "✅ Deep cleanup completed - all Docker resources removed"
+
+# Database shell
+db-shell:
+	docker compose exec postgres psql -U metaforge -d metaforge
+
+# Redis shell
+redis-shell:
+	docker compose exec redis redis-cli
+
+# Start pgAdmin
+pgadmin:
+	docker compose --profile tools up -d pgadmin
+
+# Initial setup
+setup:
+	@if [ ! -f .env ]; then \
+		cp env.example .env; \
+		echo "Created .env file from env.example"; \
+		echo "Please edit .env with your configuration"; \
+	else \
+		echo ".env file already exists"; \
+	fi
+
+# Development setup
+dev-setup: setup up
+	@echo "Waiting for database to be ready..."
+	@sleep 10
+	@echo "Development environment ready!"
+	@echo "Database: postgresql://metaforge:metaforge_password@localhost:5432/metaforge"
+	@echo "Redis: redis://localhost:6379/0"
+	@echo "pgAdmin: http://localhost:8080 (admin@metaforge.local / admin_password)"
+
+# Production setup
+prod-setup: setup
+	@echo "Production setup requires manual configuration of .env file"
+	@echo "Please review and update .env with production values"

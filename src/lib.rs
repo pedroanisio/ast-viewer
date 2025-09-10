@@ -1,0 +1,12 @@
+pub mod core;
+pub mod database;
+pub mod parser;
+pub mod github;
+pub mod scanner;
+pub mod generator;
+pub mod analysis;
+pub mod ai_operations;
+pub mod synthesis;
+pub mod versioning;
+pub mod graphql;
+pub mod phase2;

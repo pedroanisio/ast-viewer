@@ -1,0 +1,76 @@
+[package]
+name = "metaforge-engine"
+version = "0.1.0"
+edition = "2021"
+default-run = "metaforge-engine"
+
+[dependencies]
+# Core
+tokio = { version = "1.35", features = ["full"] }
+anyhow = "1.0"
+thiserror = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# CLI
+clap = { version = "4.4", features = ["derive"] }
+indicatif = "0.17"
+colored = "2.1"
+
+# Tree-sitter parsers (minimal set for MVP)
+tree-sitter = "0.20"
+tree-sitter-python = "0.20"
+tree-sitter-javascript = "0.20"
+tree-sitter-typescript = "0.20"
+tree-sitter-rust = "0.20"
+
+# Database
+sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "postgres", "uuid", "json", "chrono"] }
+uuid = { version = "1.6", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+
+# Git operations
+git2 = "0.18"
+octocrab = "0.32"
+reqwest = { version = "0.11", features = ["json"] }
+
+# Utils
+walkdir = "2.4"
+blake3 = "1.5"
+regex = "1.10"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+
+# GraphQL API for AI agents
+async-graphql = "7.0"
+async-graphql-actix-web = "7.0"
+actix-web = "4.4"
+actix-cors = "0.7"
+
+# Phase 2: Hierarchical generation dependencies
+petgraph = "0.6"
+
+# AI Operations and Synthesis
+serde_yaml = "0.9"
+async-trait = "0.1"
+
+[[bin]]
+name = "test_versioning"
+path = "src/bin/test_versioning.rs"
+
+[build-dependencies]
+cc = "1.0"
+
+[dev-dependencies]
+# Testing framework
+tokio-test = "0.4"
+tempfile = "3.8"
+serial_test = "3.0"
+proptest = "1.4"
+criterion = { version = "0.5", features = ["html_reports"] }
+fastrand = "2.0"
+
+# Additional testing utilities
+pretty_assertions = "1.4"
+mockall = "0.12"
+wiremock = "0.5"

@@ -1,0 +1,17 @@
+[package]
+name = "code-builders"
+version = "0.1.0"
+edition = "2021"
+description = "Language-specific code builders for AST-based generation"
+
+[dependencies]
+anyhow = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+uuid = { version = "1.0", features = ["v4", "serde"] }
+tracing = "0.1"
+ast-extractor = { path = "../ast-extractor" }
+semantic-mapper = { path = "../semantic-mapper" }
+
+[dev-dependencies]
+tokio-test = "0.4"

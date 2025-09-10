@@ -1,0 +1,19 @@
+[package]
+name = "generation-pipeline"
+version = "0.1.0"
+edition = "2021"
+description = "Orchestrates the complete AST-based code generation pipeline"
+
+[dependencies]
+anyhow = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+uuid = { version = "1.0", features = ["v4", "serde"] }
+tracing = "0.1"
+tokio = { version = "1.0", features = ["full"] }
+ast-extractor = { path = "../ast-extractor" }
+semantic-mapper = { path = "../semantic-mapper" }
+code-builders = { path = "../code-builders" }
+
+[dev-dependencies]
+tokio-test = "0.4"
