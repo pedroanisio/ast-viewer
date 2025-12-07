@@ -1,0 +1,6 @@
+[package]
+name = "metaforge-engine"
+version = "0.1.0"
+# Note: Clippy configuration is typically done via command line arguments in CI or #![warn] attributes in code.
+# This file is reserved for future clippy.toml support if stabilized or for cargo-clippy nuances.
+# For now, we enforce via CI flags: -D warnings -W clippy::pedantic

@@ -23,7 +23,7 @@ use crate::github::GitHubClient;
 use crate::parser::universal::UniversalParser;
 use crate::scanner::FileScanner;
 use crate::generator::{GenerationConfig, HierarchicalGenerator, get_formatter};
-// use crate::graphql::server::GraphQLServer; // Commented out until GraphQL server is implemented
+use crate::graphql::server::GraphQLServer;
 
 #[derive(ClapParser)]
 #[command(name = "metaforge-engine")]
@@ -808,11 +808,11 @@ async fn serve_graphql(bind: String, database_url: String) -> Result<()> {
     println!("✓ Database connection established");
     
     // Create and start the GraphQL server
-    // let server = GraphQLServer::new(pool.clone(), bind); // Commented out until GraphQL server is implemented
-    // server.start(pool).await
-    //     .context("Failed to start GraphQL server")?;
+    let server = GraphQLServer::new(pool.clone(), bind);
+    server.start(pool).await
+        .context("Failed to start GraphQL server")?;
     
-    println!("GraphQL server functionality is not yet implemented. The semantic versioning system is ready for integration.");
+    // println!("GraphQL server functionality is not yet implemented. The semantic versioning system is ready for integration.");
     
     Ok(())
 }
