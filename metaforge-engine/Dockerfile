@@ -1,5 +1,5 @@
 # Builder stage
-FROM rust:1.81-slim-bookworm as builder
+FROM rust:latest as builder
 WORKDIR /usr/src/app
 COPY . .
 # We use --locked to ensure reproducible builds if Cargo.lock exists

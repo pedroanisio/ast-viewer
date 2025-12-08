@@ -1,2 +1,4 @@
 *.pyc
 .env
+metaforge-engine/target/
+metaforge-engine/build.log

@@ -932,7 +932,7 @@ impl Database {
     
     /// Update an existing block in the database
     pub async fn update_block(&self, block: &Block) -> Result<()> {
-        sqlx::query!(
+        sqlx::query(
             r#"
             UPDATE blocks SET
                 block_type = $2,
@@ -953,26 +953,26 @@ impl Database {
                 complexity_metrics = $17,
                 scope_info = $18
             WHERE id = $1
-            "#,
-            block.id,
-            block.block_type,
-            block.semantic_name,
-            block.abstract_syntax,
-            block.position,
-            block.indent_level,
-            block.metadata,
-            block.parent_block_id,
-            block.position_in_parent,
-            block.parameters,
-            block.return_type,
-            block.modifiers.clone() as Option<Vec<String>>,
-            block.decorators,
-            block.body_ast,
-            block.language_ast,
-            block.language_features,
-            block.complexity_metrics,
-            block.scope_info
+            "#
         )
+        .bind(block.id)
+        .bind(&block.block_type)
+        .bind(&block.semantic_name)
+        .bind(&block.abstract_syntax)
+        .bind(block.position)
+        .bind(block.indent_level)
+        .bind(&block.metadata)
+        .bind(block.parent_block_id)
+        .bind(block.position_in_parent)
+        .bind(&block.parameters)
+        .bind(&block.return_type)
+        .bind(block.modifiers.clone() as Option<Vec<String>>)
+        .bind(&block.decorators)
+        .bind(&block.body_ast)
+        .bind(&block.language_ast)
+        .bind(&block.language_features)
+        .bind(&block.complexity_metrics)
+        .bind(&block.scope_info)
         .execute(&self.pool)
         .await?;
         
